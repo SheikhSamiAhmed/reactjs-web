@@ -1,62 +1,82 @@
-name: "CodeQL Static Analysis with Report"
+name: "CodeQL Static Analysis with Markdown Report"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+  schedule:
+    - cron: '0 0 * * 1'
 
 jobs:
   analyze:
-    name: CodeQL Analysis
+    name: Analyze with CodeQL
     runs-on: ubuntu-latest
     permissions:
       security-events: write
+      actions: read
       contents: read
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: javascript-typescript
-        build-mode: none
-        output: sarif-results
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-      with:
-        output: sarif-results
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
-    - name: Install SARIF Web Component
-      run: npm install -g sarif-web-component
+      - name: Generate Markdown Summary from SARIF
+        run: |
+          mkdir -p sarif-markdown-report
+          SARIF_FILE=$(find ./ -name "*.sarif" | head -n 1)
 
-    - name: Generate HTML report from SARIF
-      run: |
-        echo "Adding global npm bin to PATH..."
-        export PATH=$(npm bin -g):$PATH
+          if [ -z "$SARIF_FILE" ]; then
+            echo "❌ No SARIF file found!"
+            exit 1
+          fi
 
-        mkdir -p sarif-html-report
+          jq -r '
+            .runs[].results[] |
+            "### Rule: \(.ruleId)\nMessage: \(.message.text)\nFile: \(.locations[0].physicalLocation.artifactLocation.uri)\nLine: \(.locations[0].physicalLocation.region.startLine)\n---\n"
+          ' "$SARIF_FILE" > sarif-markdown-report/summary.md
 
-        SARIF_FILE=$(find sarif-results -name "*.sarif" | head -n 1)
+      - name: Check Quality Gate (80% pass threshold)
+        run: |
+          SARIF_FILE=$(find ./ -name "*.sarif" | head -n 1)
+          issues=$(jq '.runs[].results | length' "$SARIF_FILE")
+          echo "Total issues found: $issues"
 
-        if [ -z "$SARIF_FILE" ]; then
-          echo "❌ No SARIF file found!"
-          exit 1
-        fi
+          total_checks=100
+          passed=$(( total_checks - issues ))
+          pass_percentage=$(echo "scale=2; $passed * 100 / $total_checks" | bc)
+          echo "Pass percentage: $pass_percentage%"
 
-        cp "$SARIF_FILE" sarif-html-report/results.sarif.json
-        sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif.json
+          if (( $(echo "$pass_percentage < 80" | bc -l) )); then
+            echo "❌ CodeQL scan failed (threshold: 80%)."
+            exit 1
+          else
+            echo "✅ CodeQL scan passed (≥80%)."
+          fi
 
-    - name: Upload HTML Report
-      uses: actions/upload-artifact@v4
-      with:
-        name: codeql-html-report
-        path: sarif-html-report
+      - name: Upload Markdown Summary Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-summary
+          path: sarif-markdown-report/summary.md

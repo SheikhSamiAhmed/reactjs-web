@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '44 22 * * 5'  # Weekly scan on Friday
+    - cron: '0 0 * * 1' # Every Monday at 00:00
 
 jobs:
   analyze:
@@ -33,7 +33,7 @@ jobs:
       with:
         languages: javascript-typescript
         build-mode: none
-        queries: +security-extended
+        queries: +security-extended  # Includes hardcoded secrets, injection risks, etc.
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
@@ -46,13 +46,6 @@ jobs:
         name: codeql-sarif-report
         path: results.sarif
 
-    # - name: Generate HTML report from SARIF
-    #   run: |
-    #     npm install -g sarif-web-component
-    #     mkdir -p sarif-html-report
-    #     cp results.sarif sarif-html-report/results.sarif
-    #     npx sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif
-
     - name: Generate HTML report from SARIF
       run: |
         npm install -g sarif-web-component
@@ -60,16 +53,14 @@ jobs:
         cp results.sarif sarif-html-report/results.sarif.json
         npx sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif.json
 
-
     - name: Upload HTML report
       uses: actions/upload-artifact@v4
       with:
         name: codeql-html-report
         path: sarif-html-report/index.html
 
-    - name: Check Pass Percentage & Enforce Threshold
+    - name: Enforce 80% Pass Threshold
       run: |
-        echo "Checking for jq..."
         if ! command -v jq &> /dev/null; then
           echo "Installing jq..."
           sudo apt-get update && sudo apt-get install -y jq
@@ -88,9 +79,10 @@ jobs:
           exit 0
         fi
 
-        total_checks=100  # Customize this if needed
+        total_checks=100
         passed=$(( total_checks - issues ))
         pass_percentage=$(echo "scale=2; $passed * 100 / $total_checks" | bc)
+
         echo "✅ Pass percentage: $pass_percentage%"
 
         if (( $(echo "$pass_percentage < 80" | bc -l) )); then

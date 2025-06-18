@@ -50,12 +50,20 @@ jobs:
       run: |
         npm install -g sarif-web-component
         mkdir -p sarif-html-report
-
-        # Copy the correct SARIF file output by CodeQL
-        cp codeql-results/javascript-typescript.sarif sarif-html-report/results.sarif.json
-
-        # Generate HTML report
+    
+        # Find the actual .sarif file inside the results directory
+        SARIF_FILE=$(find results.sarif -name "*.sarif" | head -n 1)
+    
+        echo "Using SARIF file: $SARIF_FILE"
+    
+        if [ -z "$SARIF_FILE" ]; then
+          echo "❌ No SARIF file found."
+          exit 1
+        fi
+    
+        cp "$SARIF_FILE" sarif-html-report/results.sarif.json
         npx sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif.json
+
 
     - name: Upload HTML report
       uses: actions/upload-artifact@v4

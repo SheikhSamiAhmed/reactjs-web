@@ -24,12 +24,10 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Semgrep and reporting dependencies
+      - name: Install Semgrep
         run: |
           pip install --upgrade pip
           pip install semgrep
-          pip install semgrep --upgrade
-          pip install semgrep-formatter
 
       - name: Run Semgrep with built-in + custom rules
         run: |
@@ -42,7 +40,6 @@ jobs:
 
       - name: Generate HTML Report
         run: |
-          pip install semgrep_app  # optional helper to format
           curl -sSL https://raw.githubusercontent.com/returntocorp/semgrep/main/scripts/semgrep-to-html.py -o semgrep-to-html.py
           python3 semgrep-to-html.py semgrep-output/semgrep-report.json > semgrep-output/semgrep-report.html
 

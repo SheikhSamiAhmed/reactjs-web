@@ -46,12 +46,20 @@ jobs:
         name: codeql-sarif-report
         path: results.sarif
 
+    # - name: Generate HTML report from SARIF
+    #   run: |
+    #     npm install -g sarif-web-component
+    #     mkdir -p sarif-html-report
+    #     cp results.sarif sarif-html-report/results.sarif
+    #     npx sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif
+
     - name: Generate HTML report from SARIF
       run: |
         npm install -g sarif-web-component
         mkdir -p sarif-html-report
-        cp results.sarif sarif-html-report/results.sarif
-        npx sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif
+        cp results.sarif sarif-html-report/results.sarif.json
+        npx sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif.json
+
 
     - name: Upload HTML report
       uses: actions/upload-artifact@v4

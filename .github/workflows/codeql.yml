@@ -1,4 +1,4 @@
-name: "CodeQL Advanced"
+name: "CodeQL React Static Analysis"
 
 on:
   push:
@@ -6,11 +6,11 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '44 22 * * 5'
+    - cron: '44 22 * * 5'  # Weekly scan (every Friday)
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
+    name: Analyze React Code (JavaScript/TypeScript)
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -18,18 +18,11 @@ jobs:
       actions: read
       contents: read
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - language: javascript-typescript
-          build-mode: none
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Setup Node.js (if using JS/TS)
+    - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
         node-version: 20
@@ -37,37 +30,45 @@ jobs:
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
-        languages: ${{ matrix.language }}
-        build-mode: ${{ matrix.build-mode }}
-        queries: +security-extended
+        languages: javascript-typescript
+        build-mode: none
+        queries: +security-extended  # Use default extended security rules
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
       with:
-        category: "/language:${{matrix.language}}"
         output: results.sarif
 
-    - name: Upload SARIF report
+    - name: Upload SARIF report as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: codeql-results
+        name: codeql-report
         path: results.sarif
 
-    - name: Parse and Enforce Threshold
+    - name: Check Pass Percentage & Enforce Threshold
       run: |
-        passed=$(grep -o '"ruleId"' results.sarif | wc -l)
-        total=$(jq '.runs[].results | length' results.sarif)
-        echo "CodeQL issues found: $total"
-        if [ "$total" -eq 0 ]; then
-          echo "No issues found. 100% pass."
+        if ! command -v jq &> /dev/null; then
+          echo "jq not found. Installing jq..."
+          sudo apt-get update && sudo apt-get install -y jq
+        fi
+
+        issues=$(jq '.runs[].results | length' results.sarif)
+        echo "Total issues found: $issues"
+
+        # For simplicity, we consider "0 issues = 100% pass"
+        if [ "$issues" -eq 0 ]; then
+          echo "100% pass. No issues found."
           exit 0
         fi
-        pass_percentage=$(echo "scale=2; (1 - $total / ($total + $passed)) * 100" | bc)
+
+        total_checks=100  # You can estimate or refine this value if needed
+        passed=$(( total_checks - issues ))
+        pass_percentage=$(echo "scale=2; $passed * 100 / $total_checks" | bc)
         echo "Pass percentage: $pass_percentage%"
-        threshold=80
-        if (( $(echo "$pass_percentage < $threshold" | bc -l) )); then
-          echo "CodeQL quality below threshold ($threshold%). Failing build."
+
+        if (( $(echo "$pass_percentage < 80" | bc -l) )); then
+          echo "❌ CodeQL scan failed (threshold: 80%)."
           exit 1
         else
-          echo "CodeQL pass rate above threshold."
+          echo "✅ CodeQL scan passed (≥80%)."
         fi

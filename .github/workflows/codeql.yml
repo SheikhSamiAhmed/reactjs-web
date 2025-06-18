@@ -92,6 +92,6 @@ jobs:
     #     if (( $(echo "$pass_percentage < 80" | bc -l) )); then
     #       echo "❌ CodeQL scan failed (pass < 80%)"
     #       exit 1
-        else
-          echo "✅ CodeQL scan passed (≥ 80%)"
-        fi
+        # else
+        #   echo "✅ CodeQL scan passed (≥ 80%)"
+        # fi

@@ -40,6 +40,9 @@ jobs:
 
     - name: Generate HTML report from SARIF
       run: |
+        echo "Adding global npm bin to PATH..."
+        export PATH=$(npm bin -g):$PATH
+
         mkdir -p sarif-html-report
 
         SARIF_FILE=$(find sarif-results -name "*.sarif" | head -n 1)

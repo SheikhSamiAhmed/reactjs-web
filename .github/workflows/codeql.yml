@@ -8,7 +8,7 @@ on:
 
 jobs:
   analyze:
-    name: Analyze JavaScript/TypeScript
+    name: CodeQL Analysis
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -18,7 +18,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Node.js
+    - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
@@ -28,21 +28,20 @@ jobs:
       with:
         languages: javascript-typescript
         build-mode: none
+        output: sarif-results
 
     - name: Perform CodeQL Analysis
-      id: codeql-analysis
       uses: github/codeql-action/analyze@v3
       with:
         output: sarif-results
 
-    - name: Install SARIF web component
+    - name: Install SARIF Web Component
       run: npm install -g sarif-web-component
 
     - name: Generate HTML report from SARIF
       run: |
         mkdir -p sarif-html-report
 
-        # Find the SARIF file inside the output directory
         SARIF_FILE=$(find sarif-results -name "*.sarif" | head -n 1)
 
         if [ -z "$SARIF_FILE" ]; then
@@ -51,7 +50,7 @@ jobs:
         fi
 
         cp "$SARIF_FILE" sarif-html-report/results.sarif.json
-        npx sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif.json
+        sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif.json
 
     - name: Upload HTML Report
       uses: actions/upload-artifact@v4

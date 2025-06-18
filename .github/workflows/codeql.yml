@@ -1,105 +1,60 @@
-name: "CodeQL React Static Analysis"
+name: "CodeQL Static Analysis with Report"
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  schedule:
-    - cron: '0 0 * * 1' # Every Monday at 00:00
 
 jobs:
   analyze:
-    name: Analyze React Code
+    name: Analyze JavaScript/TypeScript
     runs-on: ubuntu-latest
-
     permissions:
       security-events: write
-      packages: read
-      actions: read
       contents: read
 
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: '20'
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
         languages: javascript-typescript
         build-mode: none
-        queries: +security-extended  # Includes hardcoded secrets, injection risks, etc.
 
     - name: Perform CodeQL Analysis
+      id: codeql-analysis
       uses: github/codeql-action/analyze@v3
       with:
-        output: results.sarif
+        output: sarif-results
 
-    - name: Upload SARIF report as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: codeql-sarif-report
-        path: results.sarif
+    - name: Install SARIF web component
+      run: npm install -g sarif-web-component
 
     - name: Generate HTML report from SARIF
       run: |
-        npm install -g sarif-web-component
         mkdir -p sarif-html-report
-    
-        # Find the actual .sarif file inside the results directory
-        SARIF_FILE=$(find results.sarif -name "*.sarif" | head -n 1)
-    
-        echo "Using SARIF file: $SARIF_FILE"
-    
+
+        # Find the SARIF file inside the output directory
+        SARIF_FILE=$(find sarif-results -name "*.sarif" | head -n 1)
+
         if [ -z "$SARIF_FILE" ]; then
-          echo "❌ No SARIF file found."
+          echo "❌ No SARIF file found!"
           exit 1
         fi
-    
+
         cp "$SARIF_FILE" sarif-html-report/results.sarif.json
         npx sarif-web-component --output sarif-html-report/index.html sarif-html-report/results.sarif.json
 
-
-    - name: Upload HTML report
+    - name: Upload HTML Report
       uses: actions/upload-artifact@v4
       with:
         name: codeql-html-report
-        path: sarif-html-report/index.html
-
-    # - name: Enforce 80% Pass Threshold
-    #   run: |
-    #     if ! command -v jq &> /dev/null; then
-    #       echo "Installing jq..."
-    #       sudo apt-get update && sudo apt-get install -y jq
-    #     fi
-
-    #     if [ ! -f results.sarif ]; then
-    #       echo "❌ SARIF file not found."
-    #       exit 1
-    #     fi
-
-    #     issues=$(jq '.runs[0].results | length' results.sarif || echo "0")
-    #     echo "🔍 Total issues found: $issues"
-
-    #     if [ "$issues" -eq 0 ]; then
-    #       echo "✅ 100% pass. No issues found."
-    #       exit 0
-    #     fi
-
-    #     total_checks=100
-    #     passed=$(( total_checks - issues ))
-    #     pass_percentage=$(echo "scale=2; $passed * 100 / $total_checks" | bc)
-
-    #     echo "✅ Pass percentage: $pass_percentage%"
-
-    #     if (( $(echo "$pass_percentage < 80" | bc -l) )); then
-    #       echo "❌ CodeQL scan failed (pass < 80%)"
-    #       exit 1
-        # else
-        #   echo "✅ CodeQL scan passed (≥ 80%)"
-        # fi
+        path: sarif-html-report

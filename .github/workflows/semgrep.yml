@@ -1,4 +1,4 @@
-name: Semgrep Scan
+name: Semgrep Static Scan
 
 on:
   push:
@@ -12,28 +12,42 @@ permissions:
 
 jobs:
   semgrep:
-    name: Run Semgrep Scan
+    name: Semgrep Static Code Analysis
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python (required for Semgrep CLI)
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Install Semgrep
+      - name: Install Semgrep and reporting dependencies
         run: |
-          python -m pip install --upgrade pip
+          pip install --upgrade pip
           pip install semgrep
+          pip install semgrep --upgrade
+          pip install semgrep-formatter
 
-      - name: Run Semgrep
+      - name: Run Semgrep with built-in + custom rules
         run: |
-          semgrep scan --config=auto --output=semgrep-report.sarif --sarif
+          mkdir -p semgrep-output
+          semgrep scan \
+            --config p/react \
+            --config p/javascript \
+            --config ./semgrep-rules \
+            --json > semgrep-output/semgrep-report.json
 
-      - name: Upload SARIF Report to GitHub
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Generate HTML Report
+        run: |
+          pip install semgrep_app  # optional helper to format
+          curl -sSL https://raw.githubusercontent.com/returntocorp/semgrep/main/scripts/semgrep-to-html.py -o semgrep-to-html.py
+          python3 semgrep-to-html.py semgrep-output/semgrep-report.json > semgrep-output/semgrep-report.html
+
+      - name: Upload HTML Report
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: semgrep-report.sarif
+          name: semgrep-html-report
+          path: semgrep-output/semgrep-report.html

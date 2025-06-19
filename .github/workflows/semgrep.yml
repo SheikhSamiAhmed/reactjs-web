@@ -1,50 +1,26 @@
-name: Semgrep Static Scan
-
 on:
+  workflow_dispatch: {}
+  pull_request: {}
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-permissions:
-  contents: read
-  security-events: write
-
+    branches:
+    - main
+    - master
+    paths:
+    - .github/workflows/semgrep.yml
+  schedule:
+  # random HH:MM to avoid a load spike on GitHub Actions at 00:00
+  - cron: 41 14 * * *
+name: Semgrep
 jobs:
   semgrep:
-    name: Semgrep Static Code Analysis
-    runs-on: ubuntu-latest
-
+    name: semgrep/ci
+    runs-on: self-hosted
+    permissions:
+      contents: read
+    env:
+      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+    container:
+      image: semgrep/semgrep
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install Semgrep
-        run: |
-          pip install --upgrade pip
-          pip install semgrep
-
-      - name: Run Semgrep with built-in + custom rules
-        run: |
-          mkdir -p semgrep-output
-          semgrep scan \
-            --config p/react \
-            --config p/javascript \
-            --config ./semgrep-rules \
-            --json > semgrep-output/semgrep-report.json
-
-      - name: Generate HTML Report
-        run: |
-          curl -sSL https://raw.githubusercontent.com/returntocorp/semgrep/main/scripts/semgrep-to-html.py -o semgrep-to-html.py
-          python3 semgrep-to-html.py semgrep-output/semgrep-report.json > semgrep-output/semgrep-report.html
-
-      - name: Upload HTML Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-html-report
-          path: semgrep-output/semgrep-report.html
+    - uses: actions/checkout@v4
+    - run: semgrep ci

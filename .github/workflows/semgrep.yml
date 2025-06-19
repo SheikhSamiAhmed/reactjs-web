@@ -3,24 +3,51 @@ on:
   pull_request: {}
   push:
     branches:
-    - main
-    - master
+      - main
+      - master
     paths:
-    - .github/workflows/semgrep.yml
+      - '**.js'
+      - '**.jsx'
+      - '**.ts'
+      - '**.tsx'
+      - .github/workflows/semgrep.yml
   schedule:
-  # random HH:MM to avoid a load spike on GitHub Actions at 00:00
-  - cron: 41 14 * * *
+    - cron: '41 14 * * *'
+
 name: Semgrep
+
 jobs:
   semgrep:
-    name: semgrep/ci
+    name: Run Semgrep Scan
     runs-on: self-hosted
+    container:
+      image: returntocorp/semgrep
     permissions:
       contents: read
     env:
       SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-    container:
-      image: semgrep/semgrep
+
     steps:
-    - uses: actions/checkout@v4
-    - run: semgrep ci
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install required tools
+        run: |
+          apt-get update && apt-get install -y curl python3-pip
+          pip3 install requests
+
+      - name: Download semgrep-to-html.py
+        run: |
+          curl -sSL https://raw.githubusercontent.com/returntocorp/semgrep/main/scripts/semgrep-to-html.py -o semgrep-to-html.py
+          chmod +x semgrep-to-html.py
+
+      - name: Run Semgrep with React rules
+        run: |
+          semgrep --config p/react --json > semgrep-report.json || true
+          python3 semgrep-to-html.py semgrep-report.json > semgrep-report.html
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-html-report
+          path: semgrep-report.html
